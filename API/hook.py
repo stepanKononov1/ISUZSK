@@ -17,13 +17,5 @@ async def auth(request: Request):
     return await connt.auth(request)
 
 
-async def get_data():
-    pass
-
-
-async def update():
-    pass
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host=config['HOST'], port=int(config['PORT']))
+# if __name__ == "__main__":
+#     uvicorn.run(app, host=config['HOST'], port=int(config['PORT']))

@@ -12,11 +12,6 @@ class Database(MySQLConnection):
             database=database
         )
         self.autocommit = False
-        try:
-            if self.is_connected():
-                print("Успешное подключение к базе данных")
-        except Error as e:
-            print(f"Ошибка при подключении к базе данных: {e}")
 
     def execute_query(self, query, params=None):
         """Выполняет запрос к базе данных без возврата результата"""
@@ -38,7 +33,9 @@ class Database(MySQLConnection):
             super().close()
 
 
-db = Database(host='5.183.188.132',
-              user='2024_mysql_k_usr',
-              password='KgT4gD9eWNS7Cque',
-              database='2024_mysql_kon')
+def return_db():
+    db = Database(host='5.183.188.132',
+                  user='2024_mysql_k_usr',
+                  password='KgT4gD9eWNS7Cque',
+                  database='2024_mysql_kon')
+    return db

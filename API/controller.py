@@ -1,21 +1,25 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from wrappers import transaction
-from model import db
+from model import return_db
 from foo import get_hashed_password, check_password
 from os.path import sep
+from const import *
 from cryptography.hazmat.primitives import serialization
 import datetime
 import jwt
 import uuid
 import pytz
+import os
 
 
 @transaction
 async def reg(request: Request):
+    db = return_db()
     cookies = request.cookies
     login = str(cookies['login'])
     password = str(cookies['password'])
+    mail = str(cookies['mail'])
     uuid3 = uuid.uuid3(uuid.NAMESPACE_DNS, login).__str__()
     db.execute_query(
         'INSERT INTO `Users` (uuid, login, password, permissions) VALUES (%s, %s, %s, %s)', (uuid3,
@@ -29,26 +33,30 @@ async def reg(request: Request):
     db.execute_query(
         'INSERT INTO `Companies` (owner_id) VALUES (%s)', (user_id, )
     )
+    db.execute_query(
+        'INSERT INTO `Users_info` (user_id, contacts) VALUES (%s, %s)', (user_id, mail)
+    )
     company_id = db.fetch_query(
         'SELECT `company_id` FROM `Companies` WHERE `owner_id` = %s', (
             user_id,)
     )[0][0]
     db.execute_query(
         'INSERT INTO `Companies_Users` (company_id, user_id) VALUES (%s, %s)', (company_id, user_id))
-    return JSONResponse({'status': 'complete'}, status_code=200)
-
-
-per = {'0': 'worker', '1': 'admin', '2': 'superuser'}
+    return JSONResponse({'status': COMPLETE}, status_code=200)
 
 
 async def auth(request: Request):
+    db = return_db()
     cookies = request.cookies
     login = cookies['login']
     password = cookies['password']
     key = serialization.load_pem_private_key(
         open('private_key.pem', 'rb').read(), password=None)
-    data = db.fetch_query(
-        'SELECT `password`, `permissions`, `user_id` FROM Users WHERE login = %s', (login,))[0]
+    try:
+        data = db.fetch_query(
+            'SELECT `password`, `permissions`, `user_id` FROM Users WHERE login = %s', (login,))[0]
+    except IndexError:
+        return JSONResponse({'status': FAILURE}, status_code=511)
     password_hash, permissions, user_id = data[0], str(data[1]), data[2]
     company = db.fetch_query(
         'SELECT `company_id` FROM Companies_Users WHERE user_id = %s', (user_id,))[0][0]
@@ -62,14 +70,32 @@ async def auth(request: Request):
         kk = serialization.load_pem_public_key(
             open('public_key.pem', 'rb').read())
         print(jwt.decode(token, kk, algorithms=["RS256"]))
-        return JSONResponse({'status': 'complete', 'dt': token}, status_code=200)
+        return JSONResponse({'status': COMPLETE, 'dt': token, 'role': per[permissions], 'company': company}, status_code=200)
     else:
-        return JSONResponse({'status': 'error'}, status_code=511)
+        return JSONResponse({'status': FAILURE}, status_code=511)
 
 
-async def get_data():
-    pass
-
-
-async def update():
-    pass
+@transaction
+async def get_data(request: Request):
+    db = return_db()
+    cookies = request.cookies
+    method = cookies['method']
+    token = cookies['dt']
+    kk = serialization.load_pem_public_key(
+        open('public_key.pem', 'rb').read())
+    data = jwt.decode(token, kk, algorithms=["RS256"])
+    if data['permissions'] in [ADMIN, OWNER]:
+        path = f'sql{sep}admin{sep}{method}.sql'
+    else:
+        path = f'sql{sep}worker{sep}{method}.sql'
+    if not os.path.exists(path):
+        return JSONResponse({'status': FAILURE, 'data': 'Dont have permissions'})
+    with open(path, 'r') as f:
+        sql = f.read()
+        foo = sql.strip().sqlit()[0].upper()
+        if foo == 'SELECT':
+            ans = db.fetch_query
+        else:
+            db.execute_query
+            ans = 'exec_'
+    return JSONResponse({'status': COMPLETE, 'data': ans})
