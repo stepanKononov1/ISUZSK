@@ -76,26 +76,36 @@ async def auth(request: Request):
 
 
 @transaction
-async def get_data(request: Request):
+def mult_execute(request: Request):
     db = return_db()
     cookies = request.cookies
-    method = cookies['method']
-    token = cookies['dt']
+    queryes = cookies[QUERYES]
+    token = cookies[TOKEN]
     kk = serialization.load_pem_public_key(
         open('public_key.pem', 'rb').read())
     data = jwt.decode(token, kk, algorithms=["RS256"])
-    if data['permissions'] in [ADMIN, OWNER]:
-        path = f'sql{sep}admin{sep}{method}.sql'
+    worker = ('desk_list', 'proj_list', 'task_list', 'task_u', 'worker_list')
+    flag = True
+    if data['permissions'] in (WORKER, ):
+        prem = 'worker'
+        for i in [queryes[i][METHOD] for i in queryes]:
+            if not i in worker:
+                flag = False
+                break
     else:
-        path = f'sql{sep}worker{sep}{method}.sql'
-    if not os.path.exists(path):
-        return JSONResponse({'status': FAILURE, 'data': 'Dont have permissions'})
-    with open(path, 'r') as f:
-        sql = f.read()
-        foo = sql.strip().sqlit()[0].upper()
-        if foo == 'SELECT':
-            ans = db.fetch_query
-        else:
-            db.execute_query
-            ans = 'exec_'
+        prem = 'admin'
+    if not flag:
+        return JSONResponse({'status': FAILURE, 'data': 'Нет доступа к функционалу'})
+    for query in queryes:
+        method = queryes[query][METHOD]
+        kwargs = queryes[query][KWARGS]
+        path = f'sql{sep}{prem}{sep}{method}.sql'
+        with open(path, 'r') as f:
+            sql = f.read()
+            foo = sql.strip().sqlit()[0].upper()
+            if foo == 'SELECT':
+                ans = db.fetch_query(sql, kwargs)
+            else:
+                db.execute_query(sql, kwargs)
+                ans = 'exec_'
     return JSONResponse({'status': COMPLETE, 'data': ans})

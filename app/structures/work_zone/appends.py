@@ -55,11 +55,13 @@ class Project():
         self.start.setMaximumHeight(200)
         self.deadline = QCalendarWidget()
         self.deadline.setMaximumHeight(200)
+        self.executor = QComboBox()
         date_container.addWidget(self.start)
         date_container.addWidget(self.deadline)
 
         form_layout.addRow("Название проекта:", self.name)
         form_layout.addRow("Начало / Дедлайн", date_container)
+        form_layout.addRow("Ответственный:", self.executor)
 
         layout.addLayout(form_layout)
 
@@ -105,11 +107,13 @@ class Project():
         self.start.setMaximumHeight(200)
         self.deadline = QCalendarWidget()
         self.deadline.setMaximumHeight(200)
+        self.executor = QComboBox()
         date_container.addWidget(self.start)
         date_container.addWidget(self.deadline)
 
         form_layout.addRow("Название проекта:", self.name)
         form_layout.addRow("Начало / Дедлайн", date_container)
+        form_layout.addRow("Ответственный:", self.executor)
 
         layout.addLayout(form_layout)
 

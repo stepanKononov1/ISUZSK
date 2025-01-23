@@ -11,18 +11,18 @@ def transaction(foo):
             db.start_transaction()
         except ProgrammingError:
             responce = JSONResponse(
-                {'status': FAILURE, 'text': 'Произошла ошибка сервера, повторите позже'}, status_code=409)
+                {'status': FAILURE, 'data': 'Произошла ошибка сервера, повторите позже'}, status_code=409)
             db.rollback()
         except Exception as e:
             responce = JSONResponse(
-                {'status': FAILURE, 'text': 'Непредвиденная ошибка'}, status_code=409
+                {'status': FAILURE, 'data': 'Непредвиденная ошибка'}, status_code=409
             )
         try:
             responce = await foo(*args, **kwargs)
         except Exception as e:
             print(e)
             responce = JSONResponse(
-                {'status': FAILURE, 'text': 'Непредвиденная ошибка'}, status_code=409)
+                {'status': FAILURE, 'data': 'Непредвиденная ошибка'}, status_code=409)
             db.rollback()
         finally:
             db.commit()

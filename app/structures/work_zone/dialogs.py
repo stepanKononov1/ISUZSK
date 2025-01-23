@@ -1,11 +1,13 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, QSizePolicy
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, QSizePolicy, QMessageBox
 from PyQt5.QtCore import Qt
+from app.web import request as query
+from app.consts import web as responce
 
 
 class WorkerView(QDialog):
     def __init__(self, data):
         """
-        data{name, exp, description, contacts}
+        data{id, name, exp, description, contacts}
         """
         super().__init__()
         self.resize(500, 300)
@@ -18,20 +20,20 @@ class WorkerView(QDialog):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        exp = QTextEdit()
-        exp.setText(self.data['exp'])
-        layout.addWidget(exp)
+        self.exp = QTextEdit()
+        self.exp.setText(self.data['exp'])
+        layout.addWidget(self.exp)
 
-        description = QTextEdit()
-        description.setText(self.data['description'])
-        layout.addWidget(description)
+        self.description = QTextEdit()
+        self.description.setText(self.data['description'])
+        layout.addWidget(self.description)
 
-        contacts = QLineEdit()
-        contacts.setText(self.data['contacts'])
-        layout.addWidget(contacts)
+        self.contacts = QLineEdit()
+        self.contacts.setText(self.data['contacts'])
+        layout.addWidget(self.contacts)
 
         btn_exit = QPushButton('Назад')
-        btn_exit.clicked.connect(self.exit)
+        btn_exit.clicked.connect(self.exit_dialog)
         btn_exit.setStyleSheet("text-align: center;")
         btn_exit.setMaximumWidth(150)
         btn_exit.setMaximumHeight(60)
@@ -40,9 +42,32 @@ class WorkerView(QDialog):
 
         self.setLayout(layout)
 
-    def exit(self):
-        """
-        Purpose: 
-        """
+    def exit_dialog(self):
+        dialog = QMessageBox()
+        dialog.setWindowTitle('Редактор')
+        dialog.setText('Данные изменены')
+        dialog.setStandardButtons(QMessageBox.Ok)
+        res = query.query_post('proj_i', {
+            'w_id': self.data['id'],
+            'exp': self.exp.toPlainText(),
+            'desc': self.description.toPlainText(),
+            'con': self.contacts.text()
+        })
+        if res['status'] == responce.COMPLETE:
+            self.setText('Данные сохранены')
+        else:
+            self.setText(f'Ошибка: {responce["data"]}')
+        dialog.exec()
 
-    # end def
+
+class ProjectSave(QMessageBox):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.setWindowTitle('Редактор')
+        self.setStandardButtons(QMessageBox.Ok)
+        res = query.query_post('proj_i', kwargs)
+        if res['status'] == responce.COMPLETE:
+            self.setText('Данные сохранены')
+        else:
+            self.setText(f'Ошибка: {responce["data"]}')
+        self.exec()

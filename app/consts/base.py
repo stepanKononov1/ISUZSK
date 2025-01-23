@@ -1,3 +1,7 @@
 ADMIN = 'a'
 OWNER = 'o'
 WORKER = 'w'
+TOKEN = 'dt'
+QUERYES = 'queryes'
+METHOD = 'method'
+KWARGS = 'kw'

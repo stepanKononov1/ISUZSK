@@ -17,5 +17,10 @@ async def auth(request: Request):
     return await connt.auth(request)
 
 
+@app.post('/execute')
+async def execute(request: Request):
+    return await connt.mult_execute(request)
+
+
 # if __name__ == "__main__":
 #     uvicorn.run(app, host=config['HOST'], port=int(config['PORT']))

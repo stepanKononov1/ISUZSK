@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from app.consts.views import view
 from app.structures.work_zone.appends import *
-from functools import partial
 
 
 class MainWindow(QMainWindow):
