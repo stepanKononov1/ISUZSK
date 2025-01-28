@@ -1,8 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from wrappers import transaction
-from model import return_db
-from foo import get_hashed_password, check_password
+from foo import get_hashed_password, check_password, date_serializer
 from os.path import sep
 from const import *
 from cryptography.hazmat.primitives import serialization
@@ -10,12 +9,12 @@ import datetime
 import jwt
 import uuid
 import pytz
+import json
 import os
 
 
 @transaction
-async def reg(request: Request):
-    db = return_db()
+async def reg(request: Request, db):
     cookies = request.cookies
     login = str(cookies['login'])
     password = str(cookies['password'])
@@ -45,8 +44,8 @@ async def reg(request: Request):
     return JSONResponse({'status': COMPLETE}, status_code=200)
 
 
-async def auth(request: Request):
-    db = return_db()
+@transaction
+async def auth(request: Request, db):
     cookies = request.cookies
     login = cookies['login']
     password = cookies['password']
@@ -76,10 +75,9 @@ async def auth(request: Request):
 
 
 @transaction
-def mult_execute(request: Request):
-    db = return_db()
+async def mult_execute(request: Request, db):
     cookies = request.cookies
-    queryes = cookies[QUERYES]
+    queryes = json.loads(cookies[QUERYES])
     token = cookies[TOKEN]
     kk = serialization.load_pem_public_key(
         open('public_key.pem', 'rb').read())
@@ -88,7 +86,7 @@ def mult_execute(request: Request):
     flag = True
     if data['permissions'] in (WORKER, ):
         prem = 'worker'
-        for i in [queryes[i][METHOD] for i in queryes]:
+        for i in [i for i in queryes]:
             if not i in worker:
                 flag = False
                 break
@@ -96,16 +94,92 @@ def mult_execute(request: Request):
         prem = 'admin'
     if not flag:
         return JSONResponse({'status': FAILURE, 'data': 'Нет доступа к функционалу'})
+    ans = {}
+    cnt = 0
     for query in queryes:
-        method = queryes[query][METHOD]
-        kwargs = queryes[query][KWARGS]
-        path = f'sql{sep}{prem}{sep}{method}.sql'
-        with open(path, 'r') as f:
-            sql = f.read()
-            foo = sql.strip().sqlit()[0].upper()
-            if foo == 'SELECT':
-                ans = db.fetch_query(sql, kwargs)
-            else:
-                db.execute_query(sql, kwargs)
-                ans = 'exec_'
-    return JSONResponse({'status': COMPLETE, 'data': ans})
+        req_kw = queryes[query][KWARGS]
+        if not isinstance(req_kw[0], list):
+            kwargs = []
+            for i in req_kw:
+                try:
+                    if i.startswith(JWT):
+                        kwargs.append(data[i.strip(JWT)])
+                    elif i.startswith(LASTIND):
+                        table_name = i.strip(LASTIND)
+                        sql = f'SHOW COLUMNS FROM {table_name}'
+                        column = db.fetch_query(sql)[0][0]
+                        path = f'sql{sep}{prem}{sep}lastrow.sql'
+                        with open(path, 'r') as f:
+                            sql = f.read().format(table_name, column)
+                            id_row = db.fetch_query(sql)
+                            id_row = id_row[0][0]
+                        kwargs.append(id_row)
+                    else:
+                        kwargs.append(i)
+                except AttributeError:
+                    kwargs.append(i)
+            path = f'sql{sep}{prem}{sep}{query}.sql'
+            with open(path, 'r') as f:
+                sql = f.read()
+                if 'req(company)' in sql:
+                    kwargs.append(data['company'])
+                foo = sql.strip().split()[0].upper()
+                if foo == 'SELECT':
+                    if not query == 'lastrow':
+                        ans.update(
+                            {f'{query}{cnt}': db.fetch_query(sql, kwargs)})
+                    else:
+                        sql_show = f'SHOW COLUMNS FROM {kwargs[0]}'
+                        column = db.fetch_query(sql_show)[0][0]
+                        sql = sql.format(kwargs[0], column)
+                        print(sql)
+                        ans.update(
+                            {f'{query}{cnt}': db.fetch_query(sql)})
+                else:
+                    db.execute_query(sql, kwargs)
+                    ans.update({f'{query}{cnt}': 'exec_'})
+                cnt += 1
+        else:
+            for j in req_kw:
+                kwargs = []
+                for i in j:
+                    try:
+                        if i.startswith(JWT):
+                            kwargs.append(data[i.strip(JWT)])
+                        elif i.startswith(LASTIND):
+                            table_name = i.strip(LASTIND)
+                            sql = f'SHOW COLUMNS FROM {table_name}'
+                            column = db.fetch_query(sql)[0][0]
+                            path = f'sql{sep}{prem}{sep}lastrow.sql'
+                            with open(path, 'r') as f:
+                                sql = f.read().format(table_name, column)
+                                id_row = db.fetch_query(sql)
+                                id_row = id_row[0][0]
+                            kwargs.append(id_row)
+                        else:
+                            kwargs.append(i)
+                    except AttributeError:
+                        kwargs.append(i)
+                path = f'sql{sep}{prem}{sep}{query}.sql'
+                with open(path, 'r') as f:
+                    sql = f.read()
+                    if 'req(company)' in sql:
+                        kwargs.append(data['company'])
+                    foo = sql.strip().split()[0].upper()
+                    if foo == 'SELECT':
+                        if not query == 'lastrow':
+                            ans.update(
+                                {f'{query}{cnt}': db.fetch_query(sql, kwargs)})
+                        else:
+                            sql_show = f'SHOW COLUMNS FROM {kwargs[0]}'
+                            column = db.fetch_query(sql_show)[0][0]
+                            sql = sql.format(kwargs[0], column)
+                            ans.update(
+                                {f'{query}{cnt}': db.fetch_query(sql)})
+                    else:
+                        db.execute_query(sql, kwargs)
+                        ans.update({f'{query}{cnt}': 'exec_'})
+                cnt += 1
+    response_data = json.dumps(
+        {'status': COMPLETE, 'data': ans}, default=date_serializer)
+    return JSONResponse(response_data)

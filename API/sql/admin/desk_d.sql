@@ -1,0 +1,1 @@
+DELETE FROM `Desks` WHERE `desk_id` = %s;

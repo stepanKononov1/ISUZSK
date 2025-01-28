@@ -9,6 +9,8 @@ TOKEN = 'dt'
 QUERYES = 'queryes'
 METHOD = 'method'
 KWARGS = 'kw'
+JWT = '123'
+LASTIND = '345'
 
 
 per = {'0': WORKER, '1': ADMIN, '2': OWNER}

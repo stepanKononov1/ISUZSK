@@ -1,0 +1,1 @@
+INSERT INTO `Desks` (`name`, `state`) VALUES (%s, %s);

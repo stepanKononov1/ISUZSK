@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, QSizePolicy, QMessageBox
 from PyQt5.QtCore import Qt
 from app.web import request as query
-from app.consts import web as responce
+from app.consts import web as web_consts
 
 
 class WorkerView(QDialog):
@@ -53,21 +53,41 @@ class WorkerView(QDialog):
             'desc': self.description.toPlainText(),
             'con': self.contacts.text()
         })
-        if res['status'] == responce.COMPLETE:
+        if res['status'] == web_consts.COMPLETE:
             self.setText('Данные сохранены')
         else:
-            self.setText(f'Ошибка: {responce["data"]}')
+            self.setText(f'Ошибка: {web_consts["data"]}')
         dialog.exec()
 
 
 class ProjectSave(QMessageBox):
-    def __init__(self, **kwargs):
+    def __init__(self, cookies):
         super().__init__()
         self.setWindowTitle('Редактор')
         self.setStandardButtons(QMessageBox.Ok)
-        res = query.query_post('proj_i', kwargs)
-        if res['status'] == responce.COMPLETE:
+        res = query.query_post(web_consts.EXECUTE, cookies)
+        if res['status'] == web_consts.COMPLETE:
             self.setText('Данные сохранены')
         else:
-            self.setText(f'Ошибка: {responce["data"]}')
+            self.setText(f'Ошибка: {web_consts["data"]}')
         self.exec()
+
+
+class MessageSuccess(QMessageBox):
+    def __init__(self, title, message, info_text=None):
+        super().__init__()
+        self.setWindowTitle(title)
+        self.setIcon(QMessageBox.Information)
+        self.setText(message)
+        if info_text:
+            self.setInformativeText(info_text)
+
+
+class MessageError(QMessageBox):
+    def __init__(self, title, message, info_text=None):
+        super().__init__()
+        self.setWindowTitle(title)
+        self.setIcon(QMessageBox.Critical)
+        self.setText(message)
+        if info_text:
+            self.setInformativeText(info_text)

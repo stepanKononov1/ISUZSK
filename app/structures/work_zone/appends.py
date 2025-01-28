@@ -12,11 +12,31 @@ from PyQt5.QtWidgets import (QMainWindow,
                              QComboBox,
                              QTableWidget,
                              QHeaderView,
-                             QSpinBox)
+                             QSpinBox,
+                             QScrollArea,
+                             QListWidget,
+                             QListWidgetItem,
+                             QTableWidgetItem)
 from datetime import datetime
 from app.structures.work_zone import dialogs
-from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtCore import QDate, Qt, QTimer
 from app.consts.views import view
+from app.consts import web as web_consts
+from app.web.request import query_post
+
+
+def get_all_items(table_widget):
+    items = []
+    for row in range(table_widget.rowCount()):
+        row_items = []
+        for col in range(table_widget.columnCount()):
+            item = table_widget.item(row, col)
+            if item is not None:
+                row_items.append(item.text())
+            else:
+                row_items.append(None)  # Если ячейка пустая
+        items.append(row_items)
+    return items
 
 
 class Project():
@@ -24,16 +44,22 @@ class Project():
         self.data = window.data
         self.window = window
         funcs = view[self.data.premission]['Проекты']
+        self.btn_create = QPushButton('Создать проект')
+        self.btn_redact = QPushButton('Редактировать проект')
+        self.btn_redact.setEnabled(False)
+        self.btn_list = QPushButton('Реестр проектов')
+        self.btn_view = QPushButton('Отобразить проект')
+        self.btn_view.setEnabled(False)
         func_tools = {
-            'Создать проект': self.create,
-            'Редактировать проект': self.redact,
-            'Реестр проектов': self.as_list,
-            'Отобразить проект': self.as_view
+            'Создать проект': (self.create, self.btn_create),
+            'Редактировать проект': (self.redact, self.btn_redact),
+            'Реестр проектов': (self.as_list, self.btn_list),
+            'Отобразить проект': (self.as_view, self.btn_view)
         }
         buttons = []
         for i in funcs:
-            button = QPushButton(i)
-            button.clicked.connect(lambda _, i=i: func_tools[i]())
+            button = func_tools[i][1]
+            button.clicked.connect(lambda _, i=i: func_tools[i][0]())
             buttons.append(button)
         self.window.add_functions(buttons)
 
@@ -53,9 +79,29 @@ class Project():
         date_container = QHBoxLayout()
         self.start = QCalendarWidget()
         self.start.setMaximumHeight(200)
+        self.start.setMinimumDate(QDate.currentDate())
         self.deadline = QCalendarWidget()
         self.deadline.setMaximumHeight(200)
+        self.deadline.setMinimumDate(QDate.currentDate().addDays(1))
         self.executor = QComboBox()
+        cookies = {
+            web_consts.QUERYES: {
+                'worker_list': {web_consts.KWARGS: [f'{web_consts.JWT}company']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res = query_post(web_consts.EXECUTE, cookies)
+        status = res[web_consts.STATUS]
+        if status == web_consts.FAILURE:
+            msg = dialogs.MessageError(
+                'Ошибка', 'Сотрудники не были полученны')
+            msg.exec_()
+        else:
+            users = res[web_consts.DATA]['worker_list0']
+            for i in users:
+                user_id, uuid, fullname = i
+                data = f'Имя: {fullname} | Айди: {uuid}'
+                self.executor.addItem(data, user_id)
         date_container.addWidget(self.start)
         date_container.addWidget(self.deadline)
 
@@ -70,24 +116,201 @@ class Project():
         line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
 
-        create_desk = QPushButton('Создать доску')
-        form_layout.addWidget(create_desk)
         self.desks = QTableWidget()
         self.desks.setColumnCount(3)
+        self.desks.setColumnHidden(1, True)
         self.desks.setColumnHidden(2, True)
-        self.desks.setHorizontalHeaderLabels(["Название", "Опция"])
+        self.desks.setHorizontalHeaderLabels(["Название"])
+        self.desks.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.desks.doubleClicked.connect(self.delete_desk)
+        self.desks.setRowCount(2)
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_i': {web_consts.KWARGS: ['В ожидании', 0]},
+                'lastrow': {web_consts.KWARGS: [f'Desks']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        self.desks.setItem(0, 0, QTableWidgetItem('В ожидании'))
+        self.desks.setItem(0, 1, QTableWidgetItem(
+            str(res_desks[web_consts.DATA]['lastrow1'][0][0])))
+        self.desks.setItem(0, 2, QTableWidgetItem('0'))
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_i': {web_consts.KWARGS: ['Завершена', 0]},
+                'lastrow': {web_consts.KWARGS: [f'Desks']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        self.desks.setItem(1, 0, QTableWidgetItem('Завершена'))
+        self.desks.setItem(1, 1, QTableWidgetItem(
+            str(res_desks[web_consts.DATA]['lastrow1'][0][0])))
+        self.desks.setItem(1, 2, QTableWidgetItem('1'))
         header = self.desks.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
-        form_layout.addWidget(self.desks)
+        layout.addWidget(self.desks)
+        add_desk = QPushButton('Добавить доску')
+        add_desk.clicked.connect(self.add_desk)
+
+        self.desks_list = QListWidget()
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_list': {web_consts.KWARGS: [f'{web_consts.JWT}company']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        desks = res_desks[web_consts.DATA]['desk_list0']
+        for i in desks:
+            desk_id, desk_name = i
+            item = QListWidgetItem(f'Доска: {desk_name}')
+            item.setData(Qt.UserRole, {'id': desk_id})
+            self.desks_list.addItem(item)
+
+        self.desks_list.itemDoubleClicked.connect(self.commit_desk)
+        self.desks_list.setHidden(True)
+        layout.addWidget(self.desks_list)
+
+        layout.addWidget(add_desk)
+
+        self.workers = QListWidget()
+        workers = res[web_consts.DATA]['worker_list0']
+        for i in workers:
+            user_id, uuid, fullname = i
+            item = QListWidgetItem(f'Имя: {fullname} | Айди: {uuid}')
+            item.setData(Qt.UserRole, {'id': user_id})
+            self.workers.addItem(item)
+        self.workers.itemDoubleClicked.connect(self.commit_worker)
+        self.workers.setHidden(True)
+        layout.addWidget(self.workers)
+
+        self.worker_area = QScrollArea()
+        self.worker_area.setWidgetResizable(True)
+        self.worker_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.worker_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.worker_area.setContentsMargins(0, 0, 0, 0)
+
+        worker_form = QFormLayout()
+        self.worker_list = QListWidget()
+        self.worker_list.itemDoubleClicked.connect(self.delete_worker)
+        worker_form.addWidget(self.worker_list)
+        self.worker_area.setLayout(worker_form)
+
+        layout.addWidget(self.worker_area)
+
+        add_worker = QPushButton('Добавить работника')
+        add_worker.clicked.connect(self.add_worker)
+        layout.addWidget(add_worker)
 
         button_container = QHBoxLayout()
         cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.as_list)
         save_button = QPushButton("Сохранить проект")
+        save_button.clicked.connect(self.save)
         button_container.addWidget(cancel_button)
         button_container.addWidget(save_button)
         layout.addLayout(button_container)
 
         self.window.panel.setWidget(widget)
+
+    def add_desk(self):
+        self.desks_list.setHidden(False)
+        self.desks.setHidden(True)
+
+    def commit_desk(self):
+        inx = self.desks.rowCount() - 1
+        self.desks.insertRow(inx)
+        self.desks.setItem(inx, 0, QTableWidgetItem(
+            self.desks_list.currentItem().text()))
+        self.desks.setItem(inx, 1, QTableWidgetItem(
+            self.desks_list.currentItem().data(Qt.UserRole)['id']))
+        self.desks_list.setHidden(True)
+        self.desks.setHidden(False)
+
+    def delete_desk(self):
+        row = self.desks.currentRow()
+        cnt = self.desks.rowCount()
+        if not row in (cnt - 1, -1, 0):
+            self.desks.removeRow(row)
+
+    def add_worker(self):
+        self.worker_area.setHidden(True)
+        self.workers.setHidden(False)
+
+    def commit_worker(self):
+        add_item = self.workers.currentItem()
+        ids = []
+        for i in range(self.worker_list.count()):
+            item = self.worker_list.item(i)
+            item_id = item.data(Qt.UserRole)
+            ids.append(item_id)
+        if add_item.data(Qt.UserRole) not in ids:
+            new_item = QListWidgetItem(add_item.text())
+            new_item.setData(Qt.UserRole, add_item.data(Qt.UserRole))
+            self.worker_list.addItem(new_item)
+        self.worker_area.setHidden(False)
+        self.workers.setHidden(True)
+
+    def delete_worker(self):
+        row = self.worker_list.currentRow()
+        self.worker_list.takeItem(row)
+
+    def save(self):
+        # Проверяем наличие всех данных
+        if not self.name.text():
+            dialog = dialogs.MessageError(
+                'Ошибка', 'Название проекта не указано')
+            dialog.exec_()
+            return
+
+        if not self.executor.currentData():
+            dialog = dialogs.MessageError('Ошибка', 'Исполнитель не выбран')
+            dialog.exec_()
+            return
+
+        if not self.start.selectedDate().isValid() or not self.deadline.selectedDate().isValid():
+            dialog = dialogs.MessageError(
+                'Ошибка', 'Неверные даты начала или завершения проекта')
+            dialog.exec_()
+            return
+
+        if self.worker_list.count() == 0:
+            dialog = dialogs.MessageError('Ошибка', 'Не выбраны исполнители')
+            dialog.exec_()
+            return
+
+        if not any(self.desks.rowCount() > 0 for i in range(self.desks.rowCount())):
+            dialog = dialogs.MessageError(
+                'Ошибка', 'Не добавлены рабочие места для проекта')
+            dialog.exec_()
+            return
+
+        # Если все данные есть, выполняем запрос
+        cookies = {
+            web_consts.QUERYES: {
+                'proj_i': {web_consts.KWARGS: [
+                    self.name.text(),
+                    self.executor.currentData(),
+                    self.start.selectedDate().toPyDate().isoformat(),
+                    self.deadline.selectedDate().toPyDate().isoformat(),
+                ]},
+                'proj_i_comp': {web_consts.KWARGS: [f'{web_consts.JWT}company', f'{web_consts.LASTIND}Projects']},
+                'proj_i_exec': {web_consts.KWARGS: [[f'{web_consts.LASTIND}Projects', self.worker_list.item(i).data(Qt.UserRole)['id']] for i in range(self.worker_list.count())]},
+                'proj_i_desk': {web_consts.KWARGS: [[f'{web_consts.LASTIND}Projects', int(i[1])] for i in get_all_items(self.desks)]}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+
+        res = query_post(web_consts.EXECUTE, cookies)
+
+        if res[web_consts.STATUS] == web_consts.COMPLETE:
+            dialog = dialogs.MessageSuccess('Подтверждение', 'Проект создан')
+            dialog.exec_()
+        else:
+            dialog = dialogs.MessageError('Ошибка', 'Проект не создан')
+            dialog.exec_()
 
     def redact(self):
         widget = QWidget()
@@ -105,9 +328,29 @@ class Project():
         date_container = QHBoxLayout()
         self.start = QCalendarWidget()
         self.start.setMaximumHeight(200)
+        self.start.setMinimumDate(QDate.currentDate())
         self.deadline = QCalendarWidget()
         self.deadline.setMaximumHeight(200)
+        self.deadline.setMinimumDate(QDate.currentDate().addDays(1))
         self.executor = QComboBox()
+        cookies = {
+            web_consts.QUERYES: {
+                'worker_list': {web_consts.KWARGS: [f'{web_consts.JWT}company']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res = query_post(web_consts.EXECUTE, cookies)
+        status = res[web_consts.STATUS]
+        if status == web_consts.FAILURE:
+            msg = dialogs.MessageError(
+                'Ошибка', 'Сотрудники не были полученны')
+            msg.exec_()
+        else:
+            users = res[web_consts.DATA]['worker_list0']
+            for i in users:
+                user_id, uuid, fullname = i
+                data = f'Имя: {fullname} | Айди: {uuid}'
+                self.executor.addItem(data, user_id)
         date_container.addWidget(self.start)
         date_container.addWidget(self.deadline)
 
@@ -122,22 +365,102 @@ class Project():
         line.setFrameShadow(QFrame.Sunken)
         layout.addWidget(line)
 
-        create_desk = QPushButton('Создать доску')
-        form_layout.addWidget(create_desk)
         self.desks = QTableWidget()
         self.desks.setColumnCount(3)
+        self.desks.setColumnHidden(1, True)
         self.desks.setColumnHidden(2, True)
-        self.desks.setHorizontalHeaderLabels(["Название", "Опция"])
+        self.desks.setHorizontalHeaderLabels(["Название"])
+        self.desks.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.desks.doubleClicked.connect(self.delete_desk)
+        self.desks.setRowCount(2)
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_i': {web_consts.KWARGS: ['В ожидании', 0]},
+                'lastrow': {web_consts.KWARGS: [f'Desks']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        self.desks.setItem(0, 0, QTableWidgetItem('В ожидании'))
+        self.desks.setItem(0, 1, QTableWidgetItem(
+            str(res_desks[web_consts.DATA]['lastrow1'][0][0])))
+        self.desks.setItem(0, 2, QTableWidgetItem('0'))
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_i': {web_consts.KWARGS: ['Завершена', 0]},
+                'lastrow': {web_consts.KWARGS: [f'Desks']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        self.desks.setItem(1, 0, QTableWidgetItem('Завершена'))
+        self.desks.setItem(1, 1, QTableWidgetItem(
+            str(res_desks[web_consts.DATA]['lastrow1'][0][0])))
+        self.desks.setItem(1, 2, QTableWidgetItem('1'))
         header = self.desks.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
-        form_layout.addWidget(self.desks)
+        layout.addWidget(self.desks)
+        add_desk = QPushButton('Добавить доску')
+        add_desk.clicked.connect(self.add_desk)
+
+        self.desks_list = QListWidget()
+        cookies = {
+            web_consts.QUERYES: {
+                'desk_list': {web_consts.KWARGS: [f'{web_consts.JWT}company']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res_desks = query_post(web_consts.EXECUTE, cookies)
+        desks = res_desks[web_consts.DATA]['desk_list0']
+        for i in desks:
+            desk_id, desk_name = i
+            item = QListWidgetItem(f'Доска: {desk_name}')
+            item.setData(Qt.UserRole, {'id': desk_id})
+            self.desks_list.addItem(item)
+
+        self.desks_list.itemDoubleClicked.connect(self.commit_desk)
+        self.desks_list.setHidden(True)
+        layout.addWidget(self.desks_list)
+
+        layout.addWidget(add_desk)
+
+        self.workers = QListWidget()
+        workers = res[web_consts.DATA]['worker_list0']
+        for i in workers:
+            user_id, uuid, fullname = i
+            item = QListWidgetItem(f'Имя: {fullname} | Айди: {uuid}')
+            item.setData(Qt.UserRole, {'id': user_id})
+            self.workers.addItem(item)
+        self.workers.itemDoubleClicked.connect(self.commit_worker)
+        self.workers.setHidden(True)
+        layout.addWidget(self.workers)
+
+        self.worker_area = QScrollArea()
+        self.worker_area.setWidgetResizable(True)
+        self.worker_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.worker_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.worker_area.setContentsMargins(0, 0, 0, 0)
+
+        worker_form = QFormLayout()
+        self.worker_list = QListWidget()
+        self.worker_list.itemDoubleClicked.connect(self.delete_worker)
+        worker_form.addWidget(self.worker_list)
+        self.worker_area.setLayout(worker_form)
+
+        layout.addWidget(self.worker_area)
+
+        add_worker = QPushButton('Добавить работника')
+        add_worker.clicked.connect(self.add_worker)
+        layout.addWidget(add_worker)
 
         button_container = QHBoxLayout()
         cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.as_list)
         delete_button = QPushButton("Удалить")
-        save_button = QPushButton("Сохранить проект")
+        delete_button.clicked.connect(self.delete)
+        save_button = QPushButton("Сохранить изменения")
+        save_button.clicked.connect(self.save)
         button_container.addWidget(cancel_button)
-        button_container.addWidget(delete_button)
         button_container.addWidget(save_button)
         layout.addLayout(button_container)
 
@@ -169,25 +492,29 @@ class Project():
         title = QLabel("Реестр проектов")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
-
         self.projects = QTableWidget()
         self.projects.setColumnCount(3)
         self.projects.setColumnHidden(2, True)
+        self.projects.setEditTriggers(QTableWidget.NoEditTriggers)
+        cookies = {
+            web_consts.QUERYES: {
+                'proj_list': {web_consts.KWARGS: [f'{web_consts.JWT}company']}
+            },
+            web_consts.TOKEN: self.data.jwt
+        }
+        res = query_post(web_consts.EXECUTE, cookies)
+        projects = res[web_consts.DATA]['proj_list0']
+        self.projects.setRowCount(len(projects))
         self.projects.setHorizontalHeaderLabels(["Название", "Дедлайн"])
+        for row, project in enumerate(projects):
+            self.projects.setItem(row, 0, QTableWidgetItem(project[1]))
+            self.projects.setItem(row, 1, QTableWidgetItem(project[4]))
+            self.projects.setItem(row, 2, QTableWidgetItem(project[0]))
         header = self.projects.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.projects)
 
         self.window.panel.setWidget(widget)
-
-    def req_select(self):
-        pass
-
-    def req_insert(self):
-        pass
-
-    def req_update(self):
-        pass
 
 
 class Board():

@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QScrollArea, QGridLayout, QWidget, QApplication,
     QVBoxLayout, QPushButton, QSizePolicy, QSpacerItem, QHBoxLayout
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from app.consts.views import view
 from app.structures.work_zone.appends import *
 

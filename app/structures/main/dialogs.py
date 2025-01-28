@@ -2,6 +2,7 @@ from app.web import request
 from app.consts.web import *
 from PyQt5.QtWidgets import QDialog, QLabel, QLineEdit, QVBoxLayout, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QErrorMessage, QMessageBox
 from app.consts.data_travel import Data
+from app.consts import web as web_consts
 from PyQt5.QtCore import Qt
 import sys
 
@@ -73,7 +74,7 @@ class RegistrationDialog(QDialog):
         login, password, mail = (self.login_input.text(
         ), self.password_input.text(), self.email_input.text())
         res = request.query_post(
-            'login', {'registration': login, 'password': password, 'mail': mail})
+            web_consts.REG, {'login': login, 'password': password, 'mail': mail})
         if res['status'] == COMPLETE:
             message = QErrorMessage(self)
             message.showMessage('Компания на введённые данные создана успешно')
@@ -136,7 +137,7 @@ class AuthorizationDialog(QDialog):
     def submit(self):
         login, password = (self.login_input.text(), self.password_input.text())
         res = request.query_post(
-            'login', {'login': login, 'password': password})
+            web_consts.AUTH, {'login': login, 'password': password})
         if res['status'] == COMPLETE:
             data = Data(res['role'], res['dt'], res['company'])
             print(data.premission)
