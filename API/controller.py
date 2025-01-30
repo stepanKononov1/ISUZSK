@@ -125,18 +125,7 @@ async def mult_execute(request: Request, db):
     kk = serialization.load_pem_public_key(
         open('public_key.pem', 'rb').read())
     data = jwt.decode(token, kk, algorithms=["RS256"])
-    worker = ('desk_list', 'proj_list', 'task_list', 'task_u', 'worker_list')
-    flag = True
-    if data['permissions'] in (WORKER, ):
-        prem = 'worker'
-        for i in [i for i in queryes]:
-            if not i in worker:
-                flag = False
-                break
-    else:
-        prem = 'admin'
-    if not flag:
-        return JSONResponse({'status': FAILURE, 'data': 'Нет доступа к функционалу'})
+    prem = 'admin'
     ans = {}
     cnt = 0
     for query in queryes:

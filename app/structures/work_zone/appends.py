@@ -593,6 +593,7 @@ class Project():
             web_consts.TOKEN: self.data.jwt
         }
         res = query_post(web_consts.EXECUTE, cookies)
+        print(res)
         projects = res[web_consts.DATA]['proj_list0']
         self.projects.setRowCount(len(projects))
         self.projects.setHorizontalHeaderLabels(["Название", "Дедлайн"])
@@ -1099,10 +1100,10 @@ class Task():
         layout.addWidget(title)
 
         self.tasks = QTableWidget()
-        self.tasks.setColumnCount(5)
-        self.tasks.setColumnHidden(4, True)
+        self.tasks.setColumnCount(6)
+        self.tasks.setColumnHidden(5, True)
         self.tasks.setHorizontalHeaderLabels(
-            ["Дедлайн", "Приоритет", "Сложность", "Имя"])
+            ["Дедлайн", "Приоритет", "Сложность", "Имя", "Исполнитель"])
 
         cookies = {
             web_consts.QUERYES: {
@@ -1122,7 +1123,8 @@ class Task():
             self.tasks.setItem(row, 1, QTableWidgetItem(str(priority)))
             self.tasks.setItem(row, 2, QTableWidgetItem(str(storypoints)))
             self.tasks.setItem(row, 3, QTableWidgetItem(str(name)))
-            self.tasks.setItem(row, 4, QTableWidgetItem(str(task_id)))
+            self.tasks.setItem(row, 4, QTableWidgetItem(str(executor)))
+            self.tasks.setItem(row, 5, QTableWidgetItem(str(task_id)))
         self.tasks.itemClicked.connect(self.set_data)
         self.tasks.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         header = self.tasks.horizontalHeader()
@@ -1132,7 +1134,7 @@ class Task():
 
     def set_data(self):
         self.set_activities(True)
-        self.task_id = int(self.tasks.item(self.tasks.currentRow(), 4).text())
+        self.task_id = int(self.tasks.item(self.tasks.currentRow(), 5).text())
 
     def set_activities(self, flag):
         self.btn_redact.setEnabled(flag)
@@ -1241,6 +1243,8 @@ class Worker():
         dialog.exec_()
 
     def as_view(self):
+        if self.data.premission == 'w':
+            return
         cookies = {
             web_consts.QUERYES: {
                 'worker_s_new': {web_consts.KWARGS: [f'{web_consts.JWT}company', self.worker_id]}
@@ -1275,7 +1279,6 @@ class Worker():
         self.workers.setRowCount(len(workers))
         self.workers.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.workers.itemClicked.connect(self.set_data)
-        self.workers.itemDoubleClicked.connect(lambda: self.set_data(True))
         for row, (user_id, fullname, age, uuid) in enumerate(workers):
             self.workers.setItem(row, 0, QTableWidgetItem(str(fullname)))
             self.workers.setItem(row, 1, QTableWidgetItem(str(age)))

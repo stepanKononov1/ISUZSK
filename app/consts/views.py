@@ -14,11 +14,11 @@ funcs_view_admin = {
 
 funcs_view_worker = {
     'Проекты': ['Реестр проектов', 'Отобразить проект'],
-    'Доски': ['Реестр досок', 'Отобразить доску'],
+    'Доски': ['Реестр досок', 'Отображение доски'],
     'Задачи': ['Реестр задач'],
     'Работники': ['Реестр работников'],
 }
 
 view[ADMIN].update(funcs_view_admin)
 view[OWNER].update(funcs_view_admin)
-view[WORKER].update(funcs_view_admin)
+view[WORKER].update(funcs_view_worker)
