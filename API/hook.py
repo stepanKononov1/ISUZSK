@@ -22,5 +22,10 @@ async def execute(request: Request):
     return await connt.mult_execute(request)
 
 
+@app.post('/regw')
+async def regw(request: Request):
+    return await connt.reg_worker(request)
+
+
 # if __name__ == "__main__":
 #     uvicorn.run(app, host='0.0.0.0', port=8000)

@@ -1,0 +1,1 @@
+INSERT INTO `Columns` (`name`, `type`, `desk_id`) VALUES (%s, %s, %s);

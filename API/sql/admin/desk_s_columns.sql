@@ -1,0 +1,1 @@
+SELECT * FROM `Columns` WHERE `desk_id` = %s;

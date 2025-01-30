@@ -1,0 +1,1 @@
+DELETE FROM `Columns_Tasks` WHERE `task_id` = %s;

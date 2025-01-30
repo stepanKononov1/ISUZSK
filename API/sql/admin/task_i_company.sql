@@ -1,0 +1,1 @@
+INSERT INTO `Companies_Tasks` (`company_id`, `task_id`) VALUES (%s, %s);

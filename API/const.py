@@ -11,6 +11,7 @@ METHOD = 'method'
 KWARGS = 'kw'
 JWT = '123'
 LASTIND = '345'
+NN = 'nn'
 
 
 per = {'0': WORKER, '1': ADMIN, '2': OWNER}

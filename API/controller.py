@@ -45,6 +45,48 @@ async def reg(request: Request, db):
 
 
 @transaction
+async def reg_worker(request: Request, db):
+    cookies = request.cookies
+    login = str(cookies['login'])
+    password = str(cookies['password'])
+    per = int(cookies['per'])
+    token = str(cookies['dt'])
+    kk = serialization.load_pem_public_key(open('public_key.pem', 'rb').read())
+    data = jwt.decode(token, kk, algorithms=["RS256"])
+    company_id = data['company']
+    uuid3 = uuid.uuid3(uuid.NAMESPACE_DNS, login).__str__()
+    db.execute_query(
+        'INSERT INTO `Users` (uuid, login, password, permissions) VALUES (%s, %s, %s, %s)', (uuid3,
+                                                                                             login,
+                                                                                             get_hashed_password(
+                                                                                                 password),
+                                                                                             per)
+    )
+    age = int(cookies['age'])
+    exp = str(cookies['exp'])
+    add = str(cookies['add'])
+    con = str(cookies['con'])
+    name = str(cookies['name'])
+    user_id = db.fetch_query(
+        'SELECT `user_id` FROM `Users` WHERE `login` = %s', (login, ))[0][0]
+    db.execute_query(
+        'INSERT INTO `Companies_Users` (company_id, user_id) VALUES (%s, %s)', (company_id, user_id))
+    db.execute_query(
+        """
+        INSERT INTO `Users_info` 
+        (`fullname`,
+        `age`,
+        `experience`,
+        `contacts`,
+        `add`,
+        `user_id`)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """, (name, age, exp, con, add, user_id)
+    )
+    return JSONResponse({'status': COMPLETE}, status_code=200)
+
+
+@transaction
 async def auth(request: Request, db):
     cookies = request.cookies
     login = cookies['login']
@@ -77,6 +119,7 @@ async def auth(request: Request, db):
 @transaction
 async def mult_execute(request: Request, db):
     cookies = request.cookies
+    print(cookies[QUERYES])
     queryes = json.loads(cookies[QUERYES])
     token = cookies[TOKEN]
     kk = serialization.load_pem_public_key(
@@ -99,25 +142,28 @@ async def mult_execute(request: Request, db):
     for query in queryes:
         req_kw = queryes[query][KWARGS]
         if not isinstance(req_kw[0], list):
-            kwargs = []
-            for i in req_kw:
-                try:
-                    if i.startswith(JWT):
-                        kwargs.append(data[i.strip(JWT)])
-                    elif i.startswith(LASTIND):
-                        table_name = i.strip(LASTIND)
-                        sql = f'SHOW COLUMNS FROM {table_name}'
-                        column = db.fetch_query(sql)[0][0]
-                        path = f'sql{sep}{prem}{sep}lastrow.sql'
-                        with open(path, 'r') as f:
-                            sql = f.read().format(table_name, column)
-                            id_row = db.fetch_query(sql)
-                            id_row = id_row[0][0]
-                        kwargs.append(id_row)
-                    else:
+            if req_kw[0] == NN:
+                kwargs = []
+            else:
+                kwargs = []
+                for i in req_kw:
+                    try:
+                        if i.startswith(JWT):
+                            kwargs.append(data[i.strip(JWT)])
+                        elif i.startswith(LASTIND):
+                            table_name = i.strip(LASTIND)
+                            sql = f'SHOW COLUMNS FROM {table_name}'
+                            column = db.fetch_query(sql)[0][0]
+                            path = f'sql{sep}{prem}{sep}lastrow.sql'
+                            with open(path, 'r') as f:
+                                sql = f.read().format(table_name, column)
+                                id_row = db.fetch_query(sql)
+                                id_row = id_row[0][0]
+                            kwargs.append(id_row)
+                        else:
+                            kwargs.append(i)
+                    except AttributeError:
                         kwargs.append(i)
-                except AttributeError:
-                    kwargs.append(i)
             path = f'sql{sep}{prem}{sep}{query}.sql'
             with open(path, 'r') as f:
                 sql = f.read()
@@ -126,6 +172,7 @@ async def mult_execute(request: Request, db):
                 foo = sql.strip().split()[0].upper()
                 if foo == 'SELECT':
                     if not query == 'lastrow':
+                        print(sql, kwargs)
                         ans.update(
                             {f'{query}{cnt}': db.fetch_query(sql, kwargs)})
                     else:
@@ -136,6 +183,7 @@ async def mult_execute(request: Request, db):
                         ans.update(
                             {f'{query}{cnt}': db.fetch_query(sql)})
                 else:
+                    print(sql, kwargs)
                     db.execute_query(sql, kwargs)
                     ans.update({f'{query}{cnt}': 'exec_'})
                 cnt += 1
@@ -177,8 +225,34 @@ async def mult_execute(request: Request, db):
                             ans.update(
                                 {f'{query}{cnt}': db.fetch_query(sql)})
                     else:
-                        db.execute_query(sql, kwargs)
-                        ans.update({f'{query}{cnt}': 'exec_'})
+                        try:
+                            db.execute_query(sql, kwargs)
+                            ans.update({f'{query}{cnt}': 'exec_'})
+                        except:
+                            for k in kwargs:
+                                kwg = []
+                                for i in k:
+                                    try:
+                                        if i.startswith(JWT):
+                                            kwg.append(data[i.strip(JWT)])
+                                        elif i.startswith(LASTIND):
+                                            table_name = i.strip(LASTIND)
+                                            sl = f'SHOW COLUMNS FROM {table_name}'
+                                            column = db.fetch_query(sl)[0][0]
+                                            path = f'sql{sep}{prem}{sep}lastrow.sql'
+                                            with open(path, 'r') as f:
+                                                sl = f.read().format(table_name, column)
+                                                id_row = db.fetch_query(sl)
+                                                id_row = id_row[0][0]
+                                            kwg.append(id_row)
+                                        else:
+                                            kwg.append(i)
+                                    except AttributeError:
+                                        kwg.append(i)
+                                print(sql, kwg)
+                                db.execute_query(sql, kwg)
+                                ans.update({f'{query}{cnt}': 'exec_'})
+                                cnt += 1
                 cnt += 1
     response_data = json.dumps(
         {'status': COMPLETE, 'data': ans}, default=date_serializer)

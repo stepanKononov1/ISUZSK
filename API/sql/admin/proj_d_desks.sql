@@ -1,0 +1,1 @@
+DELETE FROM `Projects_Desks` WHERE `project_id` = %s;

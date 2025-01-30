@@ -10,7 +10,7 @@ from const import FAILURE
 from model import return_db
 
 
-def transaction(foo):
+def transaction1(foo):
     async def wrapper(*args, **kwargs):
         db = return_db()
         # Начинаем транзакцию
@@ -33,7 +33,7 @@ def transaction(foo):
     return wrapper
 
 
-def transaction1(foo):
+def transaction(foo):
     async def wrapper(*args, **kwargs):
         db = return_db()
         try:

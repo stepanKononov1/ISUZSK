@@ -1,0 +1,1 @@
+INSERT INTO `Companies_Desks` (`company_id`, `desk_id`) VALUES (%s, %s);
